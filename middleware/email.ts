@@ -7,13 +7,13 @@ async function read_mail() {
     try {
         
         imbox_lock = await client.getMailboxLock('INBOX');
-        const messages = client.fetch("1:*",{
+        const messages = client.fetch('1:*',{
             envelope:true,
             source:true,
             uid:true
         });
 
-        for await (let msg of messages){
+        for await (const msg of messages){
             if(msg.source){
                 const parsed = await simpleParser(msg.source);
                 console.log('From:', parsed.from?.text);
