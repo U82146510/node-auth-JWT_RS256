@@ -1,9 +1,8 @@
 import mongoose from "mongoose";
 import dotenv from 'dotenv';
-import { Err } from "joi";
 dotenv.config();
 
-const atlas = process.env.atlas;
+const atlas = process.env.atlas_uri;
 if(!atlas){
     throw new Error("missing atlas connection string");
 }
@@ -11,12 +10,22 @@ if(!atlas){
 export const connect_to_atlas = async()=>{
     try {
         await mongoose.connect(atlas,{
-            serverSelectionTimeoutMS:10000,
-            socketTimeoutMS:45000,
-            maxPoolSize:10
+            serverSelectionTimeoutMS:5000,
+            socketTimeoutMS:30000,
+            maxPoolSize:50,
+            minPoolSize:5,
+            retryWrites:true,
+            retryReads:true,
+            connectTimeoutMS:10000,
+            heartbeatFrequencyMS:30000,
+            tls:true,
+            tlsAllowInvalidCertificates:false,
+            bufferCommands:false,
+            waitQueueTimeoutMS: 10000,
         })
     } catch (error) {
         console.error(error);
+        process.exit(1);
     }
 };
 
@@ -31,6 +40,21 @@ db.on('connected',()=>{
 db.on('disconnected',()=>{
     console.log('disconnected from atlas');
 });
-db.on('reconnected',()=>()=>{
+db.on('reconnected',()=>{
     console.log('reconnected to atlas');
-})
+});
+
+process.on("SIGINT",async()=>{
+    await db.close();
+    process.exit(0);
+});
+
+
+export const checkDBHealth = async()=>{
+    try {
+        await db.db?.command({ping:1})
+    } catch (error) {
+        console.error('Db health check failed',error);
+        return false
+    }
+};
