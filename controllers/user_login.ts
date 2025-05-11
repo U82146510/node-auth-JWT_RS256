@@ -1,6 +1,7 @@
 import { type Request,type Response,type NextFunction } from "express";
 import Joi from "joi";
 import { User } from "../model/User.ts";
+import {jwtService} from '../auth/jwt_service.ts';
 
 interface LoginType{
     email:string;
@@ -12,7 +13,7 @@ const loginSchema = Joi.object<LoginType>({
     password:Joi.string().min(8).required()
 })
 
-function signup_assert(arg:unknown):asserts arg is LoginType{
+function login_assert(arg:unknown):asserts arg is LoginType{
     if(typeof arg !== 'object' || arg === null
         || !('email' in arg) || !('password' in arg) ||
         typeof (arg as any).password !== 'string' ||
@@ -28,7 +29,7 @@ export const user_login = async (req:Request,res:Response,next:NextFunction)=>{
         res.status(400).json({message:error.message})
         return;
     }
-    signup_assert(value);
+    login_assert(value);
     try {
         const user = await User.findOne({email:value.email});
         if(!user ||!user.verify_password(value.password)){

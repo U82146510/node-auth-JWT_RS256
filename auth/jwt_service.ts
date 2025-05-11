@@ -2,13 +2,15 @@ import jwt from 'jsonwebtoken';
 import fs from 'fs';
 import type {StringValue} from 'ms';
 
+
 const JWT_CONFIG = {
     privateKeyPath:process.env.PRIVATE_KEY_PATH,
     publicKeyPath:process.env.PUBLIC_KEY_PATH,
     algorithm:'RS256' as const,
-    expiresIn: process.env.JWT_EXPIRES_IN,
-    issuer: process.env.JWT_ISSUER,
-    audience: process.env.JWT_AUDIENCE
+    expiresIn: process.env.JWT_EXPIRES_IN || '1h',
+    expireRefresh:process.env.JWT_REFRESH_EXPIRE_IN,
+    issuer: process.env.JWT_ISSUER || 'node app',
+    audience: process.env.JWT_AUDIENCE || 'postman',
 };
 
 
@@ -24,30 +26,28 @@ if(!fs.existsSync(JWT_CONFIG.publicKeyPath)){
     throw new Error(`Public key not found at path ${JWT_CONFIG.publicKeyPath}`);
 }
 
-function loadKeyWithValidation(keyPath:string,requiredPermissions?:number){
-    try {
-        if(requiredPermissions && process.platform!=='win32'){
-            const stats = fs.statSync(keyPath);
-            const actualPermissions = stats.mode & 0o777;
-            if(actualPermissions!==requiredPermissions){
-                console.warn(`Warning: Key file ${keyPath} has permissions ${actualPermissions.toString(8)}, recommended ${requiredPermissions.toString(8)}`);
-            }
-        }
-        return fs.readFileSync(keyPath,'utf8');
-    } catch (error) {
-        throw new Error(`Faild to load keys from ${keyPath}: ${
-            error instanceof Error ? error.message : String(error)
-        }`);
+function loadKey(keyPath:string,permission?:number):string{
+    if(!fs.existsSync(keyPath)) throw new Error(`key missing at keypath: ${keyPath}`);
+    if(permission && process.platform!=='win32'){
+      const mode = fs.statSync(keyPath).mode & 0o777;
+      if(mode!==permission){
+          throw new Error(`Insecure key permissions`);
+      }
     }
-}
+    return fs.readFileSync(keyPath,'utf8');
+};
 
-const privateKey = loadKeyWithValidation(JWT_CONFIG.privateKeyPath,0o400);
-const publicKey = loadKeyWithValidation(JWT_CONFIG.publicKeyPath,0o444); 
+const privateKey = loadKey(JWT_CONFIG.privateKeyPath,0o400);
+const publicKey = loadKey(JWT_CONFIG.publicKeyPath,0o444); 
 
 interface JwtPyload{
     id:string,
     role:'admin'|'user',
+    iat?:number,
+    exp?:number,
 };
+
+
 
 
 export class jwtService {
@@ -56,20 +56,14 @@ export class jwtService {
         issuer:JWT_CONFIG.issuer,
         audience:JWT_CONFIG.audience
     };
-    private static signOptions:jwt.SignOptions = {
-        algorithm:JWT_CONFIG.algorithm,
-        expiresIn:JWT_CONFIG.expiresIn as StringValue,
-        issuer:JWT_CONFIG.issuer,
-        audience:JWT_CONFIG.audience,
-    };
 
-    static sign(payload:payload):string{
+    static signToken(payload:JwtPyload):string{
         try {
             const token = jwt.sign(payload,privateKey,{
-                algorithm:'RS256',
-                expiresIn:'1h',
-                issuer:'node app',
-                audience:'postman'
+                algorithm:JWT_CONFIG.algorithm,
+                expiresIn:JWT_CONFIG.expiresIn as StringValue,
+                issuer:JWT_CONFIG.issuer,
+                audience:JWT_CONFIG.audience,
             });
             return token;
         } catch (error) {
@@ -77,32 +71,51 @@ export class jwtService {
         }
     };
 
-    static verify(token:string):payload{
+    static signRefreshToken(payload:Omit<JwtPyload,'iat'|'exp'>){
         try {
-            const decoded = jwt.verify(token,publicKey,{
-                algorithms:['RS256'],
-                issuer:'node app',
-                audience:'postman'})
-            return decoded as payload;
+            const refresToken = jwt.sign(payload,privateKey,{
+                algorithm:JWT_CONFIG.algorithm,
+                expiresIn:JWT_CONFIG.expireRefresh as StringValue,
+                issuer:JWT_CONFIG.issuer,
+                audience:JWT_CONFIG.audience,
+            });
+            return refresToken;
+        } catch (error) {
+            throw new Error('Error at signing refresh jwt token');
+        }   
+    };
+
+    static verify(token:string):JwtPyload{
+        try {
+            const decoded = jwt.verify(token,publicKey,this.verifyOptions)
+            return decoded as JwtPyload;
         } catch (error) {
             throw new Error('Error at verify jwt token');
         }
     };
     
-    static refresh(token:string):string{
+    static refresh(refreshToken:string):{tokenAccess:string,tokenRefresh:string}{
         try {
-            const payload = jwt.verify(token,publicKey,{
-                algorithms:['RS256'],
-                issuer:'node app',
-                audience:'postman'
+            const payload = jwt.verify(refreshToken,publicKey,{
+                algorithms:[JWT_CONFIG.algorithm],
+                issuer:JWT_CONFIG.issuer,
+                audience:JWT_CONFIG.audience
             });
-            const token_refresh = jwt.sign(payload,privateKey,{
-                algorithm:'RS256',
-                expiresIn:'1h',
-                issuer:'node app',
-                audience:'postman'
+
+            const tokenAccess = jwt.sign(payload,privateKey,{
+                algorithm:JWT_CONFIG.algorithm,
+                expiresIn:JWT_CONFIG.expiresIn as StringValue,
+                issuer:JWT_CONFIG.issuer,
+                audience:JWT_CONFIG.audience,
             });
-            return token_refresh;
+
+            const tokenRefresh = jwt.sign(payload,privateKey,{
+                algorithm:JWT_CONFIG.algorithm,
+                expiresIn:JWT_CONFIG.expireRefresh as StringValue,
+                issuer:JWT_CONFIG.issuer,
+                audience:JWT_CONFIG.audience,
+            });
+            return {tokenAccess , tokenRefresh};
         } catch (error) {
             throw new Error('Error at refresh token')
         }
