@@ -8,7 +8,7 @@ const JWT_CONFIG = {
     publicKeyPath:process.env.PUBLIC_KEY_PATH,
     algorithm:'RS256' as const,
     expiresIn: process.env.JWT_EXPIRES_IN || '1h',
-    expireRefresh:process.env.JWT_REFRESH_EXPIRE_IN,
+    expireRefresh:process.env.JWT_REFRESH_EXPIRE_IN || '24h',
     issuer: process.env.JWT_ISSUER || 'node app',
     audience: process.env.JWT_AUDIENCE || 'postman',
 };
@@ -40,7 +40,7 @@ function loadKey(keyPath:string,permission?:number):string{
 const privateKey = loadKey(JWT_CONFIG.privateKeyPath,0o400);
 const publicKey = loadKey(JWT_CONFIG.publicKeyPath,0o444); 
 
-interface JwtPyload{
+interface JwtPayload{
     id:string,
     role:'admin'|'user',
     iat?:number,
@@ -57,7 +57,7 @@ export class jwtService {
         audience:JWT_CONFIG.audience
     };
 
-    static signToken(payload:JwtPyload):string{
+    static signToken(payload:JwtPayload):string{
         try {
             const token = jwt.sign(payload,privateKey,{
                 algorithm:JWT_CONFIG.algorithm,
@@ -71,7 +71,7 @@ export class jwtService {
         }
     };
 
-    static signRefreshToken(payload:Omit<JwtPyload,'iat'|'exp'>){
+    static signRefreshToken(payload:JwtPayload){
         try {
             const refresToken = jwt.sign(payload,privateKey,{
                 algorithm:JWT_CONFIG.algorithm,
@@ -85,10 +85,10 @@ export class jwtService {
         }   
     };
 
-    static verify(token:string):JwtPyload{
+    static verify(token:string):JwtPayload{
         try {
             const decoded = jwt.verify(token,publicKey,this.verifyOptions)
-            return decoded as JwtPyload;
+            return decoded as JwtPayload;
         } catch (error) {
             throw new Error('Error at verify jwt token');
         }

@@ -36,7 +36,16 @@ export const user_login = async (req:Request,res:Response,next:NextFunction)=>{
            res.status(401).json({message:'Invalid user or password'});
            return; 
         }
-        res.status(200).json({message:"logged in successfully"});
+        const accessToken = jwtService.signToken({id:user._id as string,role:'admin'});
+        const refreshToken = jwtService.signRefreshToken({id:user._id as string,role:'admin'});
+        res.cookie('refreshToken',refreshToken,{
+            httpOnly:true,
+            secure:false,
+            sameSite:'strict',
+            maxAge:15 * 60 * 1000,
+            path:'auth/login'
+        });
+        res.status(200).json({message:"logged in successfully",token:accessToken});
     } catch (error) {
         next(error);
     }
