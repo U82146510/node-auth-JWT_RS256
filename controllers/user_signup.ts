@@ -6,12 +6,14 @@ import {User} from '../model/User.ts';
 interface SignupType{
     email:string;
     password:string;
-}
+    role:'admin'|'user';
+};
 
 const signup = Joi.object<SignupType>({
     email:Joi.string().email().required(),
-    password:Joi.string().min(8).required()
-})
+    password:Joi.string().min(8).required(),
+    role:Joi.string().valid('user','admin').default('user'),
+});
 
 function signup_assert(arg:unknown):asserts arg is SignupType{
     if(typeof arg !== 'object' || arg === null
@@ -36,7 +38,7 @@ export const user_signup = async(req:Request,res:Response,next:NextFunction)=>{
             res.status(409).json({message:'This username already exists.'});
             return;
         }
-        const user = await User.create({email:value.email,password:value.password});
+        const user = await User.create({email:value.email,password:value.password,role:value.role});
         res.status(201).json({message:'Sign up successful',id:user._id});
     } catch (error) {
         next(error);

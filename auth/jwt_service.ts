@@ -3,7 +3,7 @@ import fs from 'fs';
 import type {StringValue} from 'ms';
 
 
-const JWT_CONFIG = {
+export const JWT_CONFIG = {
     privateKeyPath:process.env.PRIVATE_KEY_PATH,
     publicKeyPath:process.env.PUBLIC_KEY_PATH,
     algorithm:'RS256' as const,
@@ -37,10 +37,10 @@ function loadKey(keyPath:string,permission?:number):string{
     return fs.readFileSync(keyPath,'utf8');
 };
 
-const privateKey = loadKey(JWT_CONFIG.privateKeyPath,0o400);
+export const privateKey = loadKey(JWT_CONFIG.privateKeyPath,0o400);
 const publicKey = loadKey(JWT_CONFIG.publicKeyPath,0o444); 
 
-interface JwtPayload{
+export interface JwtPayload{
     id:string,
     role:'admin'|'user',
     iat?:number,
